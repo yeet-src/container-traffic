@@ -210,19 +210,32 @@ static __always_inline __u32 parse_status(const char *buf, int len)
 
 // Pull the first PEEK_LEN bytes of a tcp_sendmsg payload out of the iov_iter.
 // Modern kernels store a single user buffer inline as ITER_UBUF (ptr in
-// `ubuf`); a classic iovec array is ITER_IOVEC (ptr in `__iov->iov_base`).
-// Branch on iter_type — this is the one fragile read on the wire path.
+// `ubuf`); a classic iovec array is ITER_IOVEC (ptr to a `struct iovec` whose
+// first field, at offset 0, is the buffer `iov_base`).
+//
+// CO-RE note: `ubuf`, `__iov`, `kvec`, … are all members of the SAME union in
+// iov_iter, so they share offset 0. We read `ubuf` for both cases — naming
+// only `ubuf` avoids a relocation against `__iov`, which does not exist on
+// kernels before the iov_iter field was renamed from `iov` to `__iov` (~6.4):
+// on kernel 6.1 `BPF_CORE_READ(msg, msg_iter.__iov)` fails to relocate and the
+// whole program is rejected at load. For ITER_IOVEC, `ubuf` aliases the
+// `struct iovec *`, and iov_base is that struct's first field (offset 0), so a
+// single extra user-less deref of the pointer's target gets the buffer.
 static __always_inline long read_sendmsg_buf(struct msghdr *msg, char *buf, int sz)
 {
 	__u8 itype = BPF_CORE_READ(msg, msg_iter.iter_type);
-	const void *base = NULL;
-	if (itype == ITER_UBUF) {
-		base = BPF_CORE_READ(msg, msg_iter.ubuf);
-	} else if (itype == ITER_IOVEC) {
-		const struct iovec *iov = BPF_CORE_READ(msg, msg_iter.__iov);
-		if (iov) base = BPF_CORE_READ(iov, iov_base);
-	}
+	void *base = BPF_CORE_READ(msg, msg_iter.ubuf); // union: same bytes for any iter
 	if (!base) return -1;
+
+	if (itype == ITER_IOVEC) {
+		// `base` is a `struct iovec *`; iov_base is its first field (offset 0).
+		void *iov_base = NULL;
+		if (bpf_probe_read_kernel(&iov_base, sizeof(iov_base), base) != 0 || !iov_base)
+			return -1;
+		base = iov_base;
+	} else if (itype != ITER_UBUF) {
+		return -1; // kvec/bvec/xarray etc. — not a plain user buffer we can read
+	}
 	return bpf_probe_read_user(buf, sz, base);
 }
 
