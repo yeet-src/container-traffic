@@ -44,6 +44,12 @@ fi
 
 # Drop the header row; fail if any program's verdict is not "success".
 if printf '%s\n' "$csv" | tail -n +2 | grep -q ',failure$'; then
+	# Dump the full verifier log so the CI log carries the actual rejection
+	# reason (register state, offending insn) — not just the verdict. `-v -l2`
+	# prints libbpf's full verifier output per program; without this the CSV
+	# summary hides *why* a program failed to load.
+	echo ">> full verifier log on kernel $KREL (rejection reason is in the failing program's block):" >&2
+	"$VERISTAT" -v -l2 "$OBJ" >&2 2>&1 || true
 	echo "::error::BPF verifier rejected a program on kernel $KREL" >&2
 	exit 1
 fi
