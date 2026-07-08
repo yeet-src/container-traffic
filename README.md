@@ -91,7 +91,7 @@ Attribution is read in-kernel: each request site records the task's leaf cgroup 
 > [!IMPORTANT]
 > A Linux kernel built with BTF (`CONFIG_DEBUG_INFO_BTF=y`), which is the default on recent Ubuntu, Debian, Fedora, and Amazon Linux. eBPF needs root; the yeet daemon handles the privileged load.
 
-The yeet daemon, which handles the privileged BPF load. `curl -fsSL https://yeet.cx | sh` installs it.
+The yeet daemon, which handles the privileged BPF load. eBPF capabilities are delegated to this daemonized service, which performs the privileged loading. `curl -fsSL https://yeet.cx | sh` installs it.
 
 Container attribution to a *named* container reads the running container list from the daemon's container API, so names resolve for Docker containers; traffic from anything else is bucketed honestly as `host`. (extrapolated, grounding 2 — review: tested against Docker; other runtimes that use the same cgroup-id-in-leaf convention should resolve too but were not verified.)
 
