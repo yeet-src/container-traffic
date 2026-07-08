@@ -127,7 +127,6 @@ It reads only HTTP metadata and container logs from the kernel and the daemon; i
 
 ```sh
 make          # clang + bpftool build the BPF object, esbuild bundles the JS
-make clean
 ```
 
 The toolchain (clang, bpftool, esbuild) is vendored by the yeet build setup; on macOS the BPF build runs in a Linux VM. The compiled object (`bin/probe.bpf.o`), the bundled `src/index.jsx`, and the generated `vmlinux.h` are gitignored and rebuilt by `make`.
